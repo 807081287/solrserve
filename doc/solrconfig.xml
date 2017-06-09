@@ -1,0 +1,502 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<!-- 
+     For more details about configurations options that may appear in
+     this file, see http://wiki.apache.org/solr/SolrConfigXml. 
+-->
+<config>
+  <!-- In all configuration below, a prefix of "solr." for class names
+       is an alias that causes solr to search appropriate packages,
+       including org.apache.solr.(search|update|request|core|analysis)
+
+       You may also specify a fully qualified Java classname if you
+       have your own custom plugins.
+    -->
+
+  <!-- Controls what version of Lucene various components of Solr
+       adhere to.  Generally, you want to use the latest version to
+       get all bug fixes and improvements. It is highly recommended
+       that you fully re-index after changing this setting as it can
+       affect both how text is indexed and queried.
+  -->
+  <luceneMatchVersion>5.3.1</luceneMatchVersion>
+
+  <!-- Data Directory
+
+       Used to specify an alternate directory to hold all index data
+       other than the default ./data under the Solr home.  If
+       replication is in use, this should match the replication
+       configuration.
+    -->
+  <dataDir>${solr.data.dir:}</dataDir>
+
+
+  <!-- 
+  
+    索引存储方案，共有以下存储方案：   
+    1)、solr.StandardDirectoryFactory 这是一个基于文件系统存储目录的工厂，它会试图选择最好的实现基于你当前的操作系统和Java虚拟机版本。
+	2)、solr.SimpleFSDirectoryFactory 适用于小型应用程序，不支持大数据和多线程。
+	3)、solr.NIOFSDirectoryFactory 适用于多线程环境，但是不适用在windows平台（很慢），是因为JVM还存在bug。
+	4)、solr.MMapDirectoryFactory 这个是solr3.1到4.0版本在linux64位系统下默认的实现。它是通过使用虚拟内存和内核特性调用
+		mmap去访问存储在磁盘中的索引文件。它允许lucene或solr直接访问I/O缓存。如果不需要近实时搜索功能，使用此工厂是个不错的方案。
+	5)、solr.NRTCachingDirectoryFactory 此工厂设计目的是存储部分索引在内存中，从而加快了近实时搜索的速度。
+	6)、solr.RAMDirectoryFactory 这是一个内存存储方案，不能持久化存储，在系统重启或服务器crash时数据会丢失。且不支持索引复制
+    -->
+  <directoryFactory name="DirectoryFactory" 
+                    class="${solr.directoryFactory:solr.NRTCachingDirectoryFactory}">
+  </directoryFactory> 
+
+  <!-- 
+	编解码允许使用自定义的编解码器。例如：如果想启动per-field DocValues格式, 可以在solrconfig.xml里面设置SchemaCodecFactory：
+	docValuesFormat="Lucene42": 这是默认设置，所有数据会被加载到堆内存中。
+	docValuesFormat="Disk": 这是另外一个实现，将部分数据存储在磁盘上。
+	docValuesFormat="SimpleText": 文本格式，非常慢，用于学习。
+  -->
+  <codecFactory class="solr.SchemaCodecFactory"/>
+
+  <schemaFactory class="ClassicIndexSchemaFactory"/>
+
+  <!-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      用于设置索引的低级别的属性
+	1） <filter class="solr.LimitTokenCountFilterFactory" maxTokenCount="10000"/> //限制token最大长度
+	2） <writeLockTimeout>1000</writeLockTimeout> //IndexWriter等待解锁的最长时间（毫秒）
+	3） <maxIndexingThreads>12</maxIndexingThreads> //生成索引时使用的最大线程数.
+	4） <useCompoundFile>false</useCompoundFile>
+	//solr默认为false。如果为true,索引文件减少,检索性能降低,追求平衡。通过将很多 Lucene 内部文件整合到单一一个文件来减少使用中的文件的数量。这可有助于减少 Solr 使用的文件句柄数目，代价是降低了性能。除非是应用程序用完了文件句柄
+	5） <ramBufferSizeMB>100</ramBufferSizeMB> //缓存
+	6） <maxBufferedDocs>1000</maxBufferedDocs> //缓存。两个同时定义时命中较低的那个。在合并内存中文档和创建新段之前，定义所需索引的最小文档数。段是用来存储索引信息的 Lucene 文件。较大的值可使索引时间变快但会牺牲较多的内存。
+	7）
+		<mergePolicy class="org.apache.lucene.index.TieredMergePolicy">
+        <int name="maxMergeAtOnce">20</int>
+        <int name="segmentsPerTier">20</int>
+        </mergePolicy>`
+	//合并策略。
+	8） <mergeFactor>10</mergeFactor> //合并因子,每次合并多少个segments。决定低水平的 Lucene 段被合并的频率。较小的值（最小为 2）使用的内存较少但导致的索引时间也更慢。较大的值可使索引时间变快但会牺牲较多的内存。
+	9） <mergeScheduler class="org.apache.lucene.index.ConcurrentMergeScheduler"/> //合并调度器。
+	10） <lockType>${solr.lock.type:native}</lockType> //锁。
+	11） <unlockOnStartup>false</unlockOnStartup> //unlockOnStartup告知Solr 忽略在多线程环境中用来保护索引的锁定机制。在某些情况下，索引可能会由于不正确的关机或其他错误而一直处于锁定，这就妨碍了添加和更新。将其设置为 true 可以禁用启动锁定，进而允许进行添加和更新。
+	12） <termIndexInterval>128</termIndexInterval> //Lucene loads terms into memory 间隔
+	13） <reopenReaders>true</reopenReaders> //重新打开,替代先关闭-再打开。
+	14） <deletionPolicy class="solr.SolrDeletionPolicy"> //提交删除策略,必须实现org.apache.lucene.index.IndexDeletionPolicy
+	15） <str name="maxCommitsToKeep">1</str> //最多持有提交点的数量
+	16） <str name="maxOptimizedCommitsToKeep">0</str> //最多持有优化提交点的数量
+	17） <str name="maxCommitAge">2MINUTES</str> OR <str name="maxCommitAge">1DAY</str><br>　//一旦达到指定的时间删除所有的提交点　　
+	18） <infoStream file="INFOSTREAM.txt">false</infoStream>//相当于把创建索引时的日志输出。  
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ -->
+  <indexConfig>
+  <!-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  设置索引库的锁方式，主要有三种：
+	⑴.single：适用于只读的索引库，即索引库是定死的，不会再更改
+	⑵.native：使用本地操作系统的文件锁方式，不能用于多个solr服务共用同一个索引库。Solr3.6 及后期版本使用的默认锁机制。
+	⑶.simple：使用简单的文件锁机制
+	
+ 19) <maxMergeDocs> 2147483647 </maxMergeDocs> //控制可由 Solr 合并的 Document 的最大数。较小的值 (< 10,000) 最适合于具有大量更新的应用程序。
+ 20) <maxFieldLength> 10000 </maxFieldLength>
+ //对于给定的 Document，控制可添加到 Field 的最大条目数，进而截断该文档。如果文档可能会很大，就需要增加这个数值。然而，若将这个值设置得过高会导致内存不足错误。
+ （默认设置 <filter class="solr.LimitTokenCountFilterFactory" maxTokenCount="10000"/>）
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ -->
+    <lockType>${solr.lock.type:native}</lockType>
+   
+     <infoStream>true</infoStream>
+  </indexConfig>
+
+
+  <!-- JMX
+       
+       This example enables JMX if and only if an existing MBeanServer
+       is found, use this if you want to configure JMX through JVM
+       parameters. Remove this to disable exposing Solr configuration
+       and statistics to JMX.
+
+       For more details see http://wiki.apache.org/solr/SolrJmx
+    -->
+  <jmx />
+  <!-- If you want to connect to a particular server, specify the
+       agentId 
+    -->
+  <!-- <jmx agentId="myAgent" /> -->
+  <!-- If you want to start a new MBeanServer, specify the serviceUrl -->
+  <!-- <jmx serviceUrl="service:jmx:rmi:///jndi/rmi://localhost:9999/solr"/>
+    -->
+
+  <!-- The default high-performance update handler -->
+  <updateHandler class="solr.DirectUpdateHandler2">
+
+    <!-- 
+	 设置索引库更新日志，默认路径为solr home下面的data/tlog。随着索引库的频繁更新，tlog文件会越来越大，所以建议提交索引时采用硬提交方式，即批量提交。
+    -->
+    <updateLog>
+      <str name="dir">${solr.ulog.dir:}</str>
+      <int name="numVersionBuckets">${solr.ulog.numVersionBuckets:65536}</int>
+    </updateLog>
+ 
+    <!-- 
+		//硬提交
+		<autoCommit>
+			<maxDocs>10000</maxDocs>
+			<maxTime>${solr.autoCommit.maxTime:5000}</maxTime>
+			<openSearcher>true</openSearcher>
+		</autoCommit>`
+        自动硬提交方式:maxTime：设置多长时间提交一次maxDocs：设置达到多少文档提交一次openSearcher：文档提交后是否开启新的searcher，
+		如果false，文档只是提交到index索引库，搜索结果中搜不到此次提交的文档；如果true，既提交到index索引库，也能在搜索结果中搜到此次提交的内容。
+      -->
+     <autoCommit> 
+	   <maxDocs>10000</maxDocs>
+       <maxTime>${solr.autoCommit.maxTime:15000}</maxTime> 
+       <openSearcher>true</openSearcher> 
+     </autoCommit>
+
+    <!--
+	`<autoSoftCommit>`
+	`<maxTime>${solr.autoSoftCommit.maxTime:-1}</maxTime>` 
+	`</autoSoftCommit>` //软提交；
+	1、把内存文件fsync到磁盘，但不创建index descriptor。也就是说原索引和现在的索引还互不感知，所以如果jvm崩溃，那这部分索引就没了。
+	2、可以重新打开searcher，使得新的索引可以被查找到。
+      -->
+     <autoSoftCommit> 
+       <maxTime>${solr.autoSoftCommit.maxTime:-1}</maxTime> 
+     </autoSoftCommit>
+
+  </updateHandler>
+  
+  <!-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+       Query section - these settings control query time things like caches
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ -->
+  <query>
+    <!-- Max Boolean Clauses
+
+      <maxBooleanClauses>1024</maxBooleanClauses>
+	  设置boolean 查询中，最大条件数。在范围搜索或者前缀搜索时，会产生大量的 boolean 条件，
+	  如果条件数达到这个数值时，将抛出异常，限制这个条件数，可以防止条件过多查询等待时间过长。        
+      -->
+    <maxBooleanClauses>1024</maxBooleanClauses>
+
+
+	  <!-- 过滤器缓存 -->
+    <filterCache class="solr.FastLRUCache"
+                 size="512"
+                 initialSize="512"
+                 autowarmCount="0"/>
+
+    <!-- 查询结果缓存 -->
+    <queryResultCache class="solr.LRUCache"
+                     size="512"
+                     initialSize="512"
+                     autowarmCount="0"/>
+   
+    <!-- 查询文档缓存 -->
+    <documentCache class="solr.LRUCache"
+                   size="512"
+                   initialSize="512"
+                   autowarmCount="0"/>
+    
+    <!-- 自定义缓存 --> 
+    <cache name="perSegFilter"
+      class="solr.search.LRUCache"
+      size="10"
+      initialSize="0"
+      autowarmCount="10"
+      regenerator="solr.NoOpRegenerator" />
+	  
+    <!-- Lazy Field Loading
+
+         If true, stored fields that are not requested will be loaded
+         lazily.  This can result in a significant speed improvement
+         if the usual case is to not load all stored fields,
+         especially if the skipped fields are large compressed text
+         fields.
+		 某些字段延时加载，以提高性能，例如内容较多的压缩文件
+    -->
+    <enableLazyFieldLoading>true</enableLazyFieldLoading>
+
+   <!-- Result Window Size
+
+        An optimization for use with the queryResultCache.  When a search
+        is requested, a superset of the requested number of document ids
+        are collected.  For example, if a search for a particular query
+        requests matching documents 10 through 19, and queryWindowSize is 50,
+        then documents 0 through 49 will be collected and cached.  Any further
+        requests in that range can be satisfied via the cache.
+		
+		Result Window Size 优化queryResultCache结果cache
+     -->
+   <queryResultWindowSize>20</queryResultWindowSize>
+
+   <!-- Maximum number of documents to cache for any entry in the
+        queryResultCache. 
+		查询结果文档的最大缓存数
+     -->
+   <queryResultMaxDocsCached>200</queryResultMaxDocsCached>
+
+    <!-- Use Cold Searcher
+
+         If a search request comes in and there is no current
+         registered searcher, then immediately register the still
+         warming searcher and use it.  If "false" then all requests
+         will block until the first searcher is done warming.
+		 
+		 使用云搜索 
+      -->
+    <useColdSearcher>false</useColdSearcher>
+
+    <!-- Max Warming Searchers
+         
+         Maximum number of searchers that may be warming in the
+         background concurrently.  An error is returned if this limit
+         is exceeded.
+
+         Recommend values of 1-2 for read-only slaves, higher for
+         masters w/o cache warming.
+		 该参数用于设置最大的 searcher 数量，这些 searcher 实现预热好的，随时可以调用。
+		 如果超过这个数量，将会报错。在一个只读的索引库中，2个预热的 searcher 是相对合理的，如果是读写的索引库中，根据内存和cpu的大小可以给一个相对大一点的值。
+      -->
+    <maxWarmingSearchers>2</maxWarmingSearchers>
+
+  </query>
+
+
+  <!-- Request Dispatcher
+
+      Request Dispatcher 主要是介绍当有请求访问SolrCore时SolrDispatchFilter如何处理。 
+	  handleSelect是一个以前版本中遗留下来的属性,会影响请求的对应行为（比如/select?qt=XXX）。
+	  当handleSelect="true"时导致SolrDispatchFilter将请求转发给qt指定的处理器（前提是/select已经注册）。
+	  当handleSelect="false"时会直接访问/select,若/select未注册则为404。
+    -->
+  <requestDispatcher handleSelect="false" >
+    <!-- Request Parsing
+
+     Request Parsing：请求解析  
+	这些设置说明Solr Requests如何被解析,以及对ContentStreams有什么限制。  
+	enableRemoteStreaming - 是否允许使用stream.file和stream.url参数来指定远程streams。  
+	multipartUploadLimitInKB - 指定多文件上传时Solr允许的最大的size,设置了通过多部分（multi-part）的HTTP POST请求提交的文档大小的上限，单位是Kb。这个值指定为1024的倍数来确定Bytes的大小
+	formdataUploadLimitInKB - 表单通过POST请求发送的最大size,设置了一个用Kb表示的限制，用以限制HTTP POST请求中提交的表单数据的大小，这个大小可以用来传递请求的参数但并不适合（写入）URL中
+	addHttpRequestToContext - 用来声明原始的HttpServletRequest对象应该被包括在使用httpRequest的SolrQueryRequest的上下文集合（context map）中。
+	这个HttpServletRequest不会用于任何Solr的组成部分，但在开发自定义的插件是会很有用
+
+      --> 
+    <requestParsers enableRemoteStreaming="true" 
+                    multipartUploadLimitInKB="2048000"
+                    formdataUploadLimitInKB="2048"
+                    addHttpRequestToContext="false"/>
+
+    <!-- HTTP Caching
+
+        `<httpCaching>`元素控制了HTTP缓存控制头（HTTP cache control headers）。不要将这些设置和Solr内部的缓存配置混淆。
+		这个元素控制了W3C HTTP规格定义的HTTP响应的缓存过程。这个元素允许三个属性和一个下级元素。
+		`<httpCaching>`元素的属性决定了是否允许对一个GET请求进行304响应，如果可以，它应该是什么响应类别（sort）。
+		当一个HTTP用户程序生成一个GET请求，如果资源从上一次被取得后还没有被修改，那么它可以可选择地指定一个可接受的304响应。
+		
+		
+	never304
+	如果将这个值设置为true，那么即使请求的资源还没有被修改，一个GET请求也永远不会得到一个304响应。
+	如果这个属性被设置为true，那么接下来的两个属性会被忽略。将这个属性设置为true对于开发来说是方便的，
+	因为当通过支持缓存头的web浏览器或者其他用户修补Solr的响应时，304响应可能会使人混淆。
+
+	lastModFrom 这个属性可以设置为openTime（默认值）或者dirLastMod。openTime指示了最后更改时间，相对于客户发送的If-Modified-Since头，
+	它应该在搜索器开始的时候计算。如果当索引在硬盘上更新时你需要精确同步，那么使用dirLastMod。
+
+	etagSeed
+	这个属性的值被作为ETag头的值。改变这个值可以有助于强制用户重新取得内容，即使索引没有被改变。例如，当你修改了配置的时候。
+	
+	`<httpCaching never304="false"
+	lastModFrom="openTime"
+	etagSeed="Solr">
+	<cacheControl>max-age=30, public</cacheControl>
+	</httpCaching>`
+      -->
+    <httpCaching never304="true" />
+
+  </requestDispatcher>
+
+  <!-- Request Handlers 
+
+       http://wiki.apache.org/solr/SolrRequestHandler
+
+       Incoming queries will be dispatched to a specific handler by name
+       based on the path specified in the request.
+
+       Legacy behavior: If the request path uses "/select" but no Request
+       Handler has that name, and if handleSelect="true" has been specified in
+       the requestDispatcher, then the Request Handler is dispatched based on
+       the qt parameter.  Handlers without a leading '/' are accessed this way
+       like so: http://host/app/[core/]select?qt=name  If no qt is
+       given, then the requestHandler that declares default="true" will be
+       used or the one named "standard".
+
+       If a Request Handler is declared with startup="lazy", then it will
+       not be initialized until the first request that uses it.
+
+    -->
+  <!-- SearchHandler
+
+      requestHandler（请求处理器）提供了类似webservice的功能，可以通过http请求solr搜索Configuration
+    -->
+  <requestHandler name="/select" class="solr.SearchHandler">
+    <!-- default values for query parameters can be specified, these
+         will be overridden by parameters in the request
+      -->
+     <lst name="defaults">
+       <str name="echoParams">explicit</str>
+       <int name="rows">10</int>
+     </lst>
+
+    </requestHandler>
+
+  <!-- A request handler that returns indented JSON by default -->
+  <requestHandler name="/query" class="solr.SearchHandler">
+     <lst name="defaults">
+       <str name="echoParams">explicit</str>
+       <str name="wt">json</str>
+       <str name="indent">true</str>
+       <str name="df">text</str>
+     </lst>
+  </requestHandler>
+
+  <!--
+    The export request handler is used to export full sorted result sets.
+    Do not change these defaults.
+  -->
+  <requestHandler name="/export" class="solr.SearchHandler">
+    <lst name="invariants">
+      <str name="rq">{!xport}</str>
+      <str name="wt">xsort</str>
+      <str name="distrib">false</str>
+    </lst>
+
+    <arr name="components">
+      <str>query</str>
+    </arr>
+  </requestHandler>
+
+
+  <initParams path="/update/**,/query,/select,/tvrh,/elevate,/spell">
+    <lst name="defaults">
+      <str name="df">text</str>
+    </lst>
+  </initParams>
+
+  <!-- Field Analysis Request Handler
+
+       RequestHandler that provides much the same functionality as
+       analysis.jsp. Provides the ability to specify multiple field
+       types and field names in the same request and outputs
+       index-time and query-time analysis for each of them.
+
+       Request parameters are:
+       analysis.fieldname - field name whose analyzers are to be used
+
+       analysis.fieldtype - field type whose analyzers are to be used
+       analysis.fieldvalue - text for index-time analysis
+       q (or analysis.q) - text for query time analysis
+       analysis.showmatch (true|false) - When set to true and when
+           query analysis is performed, the produced tokens of the
+           field value analysis will be marked as "matched" for every
+           token that is produces by the query analysis
+   -->
+  <requestHandler name="/analysis/field" 
+                  startup="lazy"
+                  class="solr.FieldAnalysisRequestHandler" />
+
+
+  <!-- Document Analysis Handler
+
+       http://wiki.apache.org/solr/AnalysisRequestHandler
+
+       An analysis handler that provides a breakdown of the analysis
+       process of provided documents. This handler expects a (single)
+       content stream with the following format:
+
+       <docs>
+         <doc>
+           <field name="id">1</field>
+           <field name="name">The Name</field>
+           <field name="text">The Text Value</field>
+         </doc>
+         <doc>...</doc>
+         <doc>...</doc>
+         ...
+       </docs>
+
+    Note: Each document must contain a field which serves as the
+    unique key. This key is used in the returned response to associate
+    an analysis breakdown to the analyzed document.
+
+    Like the FieldAnalysisRequestHandler, this handler also supports
+    query analysis by sending either an "analysis.query" or "q"
+    request parameter that holds the query text to be analyzed. It
+    also supports the "analysis.showmatch" parameter which when set to
+    true, all field tokens that match the query tokens will be marked
+    as a "match". 
+  -->
+  <requestHandler name="/analysis/document" 
+                  class="solr.DocumentAnalysisRequestHandler" 
+                  startup="lazy" />
+
+  <!-- Echo the request contents back to the client -->
+  <requestHandler name="/debug/dump" class="solr.DumpRequestHandler" >
+    <lst name="defaults">
+     <str name="echoParams">explicit</str> 
+     <str name="echoHandler">true</str>
+    </lst>
+  </requestHandler>
+  
+
+
+  <!-- Search Components
+
+       Search components are registered to SolrCore and used by 
+       instances of SearchHandler (which can access them by name)
+       
+       By default, the following components are available:
+       
+       <searchComponent name="query"     class="solr.QueryComponent" />
+       <searchComponent name="facet"     class="solr.FacetComponent" />
+       <searchComponent name="mlt"       class="solr.MoreLikeThisComponent" />
+       <searchComponent name="highlight" class="solr.HighlightComponent" />
+       <searchComponent name="stats"     class="solr.StatsComponent" />
+       <searchComponent name="debug"     class="solr.DebugComponent" />
+       
+     -->
+
+  <!-- Terms Component
+
+       http://wiki.apache.org/solr/TermsComponent
+
+       A component to return terms and document frequency of those
+       terms
+    -->
+  <searchComponent name="terms" class="solr.TermsComponent"/>
+
+  <!-- A request handler for demonstrating the terms component -->
+  <requestHandler name="/terms" class="solr.SearchHandler" startup="lazy">
+     <lst name="defaults">
+      <bool name="terms">true</bool>
+      <bool name="distrib">false</bool>
+    </lst>     
+    <arr name="components">
+      <str>terms</str>
+    </arr>
+  </requestHandler>
+
+  <!-- Legacy config for the admin interface -->
+  <admin>
+    <defaultQuery>*:*</defaultQuery>
+  </admin>
+
+</config>

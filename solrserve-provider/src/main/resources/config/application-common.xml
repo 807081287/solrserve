@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="
+            http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
+            http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.0.xsd"
+       default-lazy-init="true">
+
+    <context:component-scan base-package="org.jon.lv.solrserve"/>
+
+    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="order" value="0" />
+        <property name="ignoreUnresolvablePlaceholders" value="true" />
+        <property name="ignoreResourceNotFound" value="true"/>
+        <property name="locations">
+            <list>
+                <value>classpath:dubbo.properties</value>
+                <value>classpath:solrserve.properties</value>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="dubboApplicationConfig" class="com.alibaba.dubbo.config.ApplicationConfig">
+        <property name="name" value="${app_name}"/>
+    </bean>
+
+    <bean id="dubboRegistryConfig" class="com.alibaba.dubbo.config.RegistryConfig">
+        <property name="default" value="true"/>
+        <property name="address" value="${registry.url}"/>
+        <property name="file" value="${registry.file}"/>
+    </bean>
+
+    <bean id="dubboProtocolConfig" class="com.alibaba.dubbo.config.ProtocolConfig">
+        <property name="port" value="${protocol.port}"/>
+    </bean>
+
+
+    <bean id="solrClientManager" class="org.jon.lv.solrserve.manager.SolrClientManager" init-method="init">
+        <constructor-arg index="0" value="${solrserve.master.url}"/>
+        <constructor-arg index="1" value="${solrserve.slave.url}"/>
+        <constructor-arg index="2" value="${solrserve.core.name}"/>
+    </bean>
+
+</beans>

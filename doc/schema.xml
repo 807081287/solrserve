@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<schema name="example" version="1.5">
+   <fields>
+
+　　<!--field属性说明：
+
+　　filed字段用于定义数据源字段所使用的搜索类型与相关设置。
+
+　　name:数据源字段名，搜索使用到。
+
+　　type:搜索类型名例如中文ika搜索名text_ika,对应于fieldType中的name.不需要分词的字符串类型，string即可，如果需要分词，types中配置好的分词type.
+
+　　indexed:是否被索引，只有设置为true的字段才能进行搜索排序分片（earchable, sortable, facetable）。
+
+　　stored:是否存储内容，如果不需要存储字段值，尽量设置为false以提高效率。
+
+　　multiValued:是否为多值类型，SOLR允许配置多个数据源字段存储到一个搜索字段中。多个值必须为true,否则有可能抛出异常。
+
+　　-->
+
+　　<field name="id" type="string" indexed="true" stored="true" required="true" />
+	
+　　<field name="sex" type="int" indexed="true" stored="true" />
+
+　　<field name="name" type="string" indexed="true" stored="true" />
+
+　　<field name="age" type="int" indexed="true" stored="true" />
+
+　　<field name="road" type="string" indexed="true" stored="true"/>
+
+　　<field name="tel" type="string" indexed="true" stored="true"/>
+	
+　　<field name="dept" type="string" indexed="true" stored="true"/>
+
+	<field name="email" type="string" indexed="true" stored="true"/>
+	
+　　<field name="salary" type="float" indexed="true" stored="true" />
+
+	<field name="status" type="int" indexed="true" stored="true" />
+	
+	<field name="edlevel" type="int" indexed="true" stored="true" />
+
+	<field name="hiredate" type="date" indexed="true" stored="true" />
+	
+	<field name="modify_time" type="date" indexed="true" stored="true" />
+
+　　<field name="all" type="text_ik" indexed="true" stored="true" multiValued="true"/>
+
+	<field name="_version_" type="long" indexed="true"  stored="true"/>
+
+	<!-- 默认字段 必须添加 -->
+	<field name="text" type="text_general" indexed="true" stored="false" multiValued="true"/>
+	
+　　<!-- 动态字段定义通过*来定义  -->
+
+　　<dynamicField name="*_i"  type="int"    indexed="true"  stored="true"/>
+
+　　<dynamicField name="*_s"  type="string"  indexed="true"  stored="true"/>
+
+　　</fields>
+
+　　<!--uniqueKey节点
+
+　　设置主键，solr必须有一个主键，一般为id也可以自行定义。
+
+　　这个字段决定和增强文档的唯一性
+
+　　-->
+
+　　<uniqueKey>id</uniqueKey>
+
+　　<!--defaultSearchField节点
+
+　　默认搜索的字段，默认值为text,
+
+　　如果我们已经将需要搜索的字段拷贝至all字段了，在这里设为all即可-->
+
+　　<defaultSearchField>all</defaultSearchField>
+
+　　<!--solrQueryParser节点
+
+　　默认搜索操作符参数，及搜索短语间的逻辑，用AND增加准确率，用OR增加覆盖面，建议用AND,也可在搜索语句中定义。
+
+　　例如搜索"Java 多线程",使用AND默认搜索为"Java AND 多线程"-->
+
+　　<solrQueryParser defaultOperator="AND"/>
+
+　　<!--copyField节点
+
+　　如果我们的搜索需要搜索多个字段该怎么办呢？这时候，我们就可以使用copyField节点，我们将所有的中文分词字段全部拷贝至all中，当我们进行全文检索是，只用搜索all字段就OK了。
+
+　　-->
+	<copyField source="dept" dest="all" /> 
+	
+　　<copyField source="name" dest="all" />
+
+　　<types>
+
+　　<!--定义字段处理类型  -->
+
+　　<fieldType name="int" class="solr.TrieIntField" precisionStep="0" omitNorms="true" positionIncrementGap="0" />
+
+　　<fieldType name="float" class="solr.TrieFloatField" precisionStep="0" omitNorms="true" positionIncrementGap="0" />
+
+	<fieldType name="long" class="solr.TrieLongField" precisionStep="0" positionIncrementGap="0"/>
+	
+	<fieldType name="date" class="solr.TrieDateField" precisionStep="0" positionIncrementGap="0"/>
+
+　　<fieldType name="double" class="solr.TrieDoubleField" precisionStep="0" omitNorms="true" positionIncrementGap="0" />
+
+　　<fieldType name="string" class="solr.StrField" sortMissingLast="true" omitNorms="true" />
+
+　　<fieldType name="text" class="solr.TextField" positionIncrementGap="100">
+
+　　<analyzer>
+
+　　<tokenizer class="solr.WhitespaceTokenizerFactory" />
+
+　　</analyzer>
+
+　　</fieldType>
+
+　　<!-- 定义常规分词 类型-->
+
+　　<fieldType name="text_general" class="solr.TextField" positionIncrementGap="100">
+
+	　　<!-- 建立索引时的分词器配置 -->
+
+	　　<analyzer type="index">
+
+	　　<!-- 建立索引时使用标准分词器 -->
+
+	　　<tokenizer class="solr.StandardTokenizerFactory"/>
+
+	　　<!-- 停用词过滤器， 用于索引文档中的停用词去掉 -->
+
+	　　<filter class="solr.StopFilterFactory" ignoreCase="true" words="stopword.txt" />
+
+	　　<!-- 大写转小写过滤器 -->
+
+	　　<filter class="solr.LowerCaseFilterFactory"/>
+
+	　　</analyzer>
+
+	　　<!-- 查询的时候使用的分词器   -->
+
+	　　<analyzer type="query">
+
+	　　<!-- 查询索引时使用标准分词器 -->
+		<tokenizer class="solr.StandardTokenizerFactory"/>
+
+	　　<!-- 停用词过滤器， 用于索引文档中的停用词去掉 -->
+
+	　　<filter class="solr.StopFilterFactory" ignoreCase="true" words="stopword.txt" />
+
+	　　<!-- 定义查询的时使用同义词过滤器   -->
+
+	　　<filter class="solr.SynonymFilterFactory" synonyms="synonyms.txt" ignoreCase="true" expand="true"/>
+
+	　　<!-- 大写转小写过滤器 -->
+
+	　　<filter class="solr.LowerCaseFilterFactory"/>
+
+	　　</analyzer>
+
+　　</fieldType>
+
+
+　　<!--定义IK分词类型-->
+　　<fieldType name="text_ik" class="solr.TextField">
+
+　　	<!--索引时候的分词器-->
+
+　　	<analyzer type="index" isMaxWordLength="false" class="org.wltea.analyzer.lucene.IKAnalyzer" useSmart="false" />
+
+　　	<!--查询时候的分词器-->
+
+　　	<analyzer type="query" isMaxWordLength="true" class="org.wltea.analyzer.lucene.IKAnalyzer" useSmart="false"/>
+
+　　</fieldType>
+
+　　</types>
+
+</schema>
