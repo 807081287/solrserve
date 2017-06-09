@@ -1,0 +1,2 @@
+# solrserve
+基于solrj开发solr主从搜索引擎服务的dubbo组件
